@@ -156,6 +156,40 @@ function istUnvollstaendig(visit: DemoVisit): boolean {
   return !visit.beschreibung;
 }
 
+/** Übernimmt ein Webhook-Ergebnis in eine DemoVisit-Struktur (Felder normalisiert). */
+function alsDemoVisit(
+  visitId: string,
+  phone: string | null | undefined,
+  erstelltAmFallback: string,
+  result: any,
+): DemoVisit {
+  return {
+    visit_id: visitId,
+    erstellt_am: result.erstellt_am ?? erstelltAmFallback,
+    phone: phone ?? null,
+    organisation: result.organisation ?? null,
+    ansprechpartner: result.ansprechpartner ?? null,
+    weitere_ansprechpartner: Array.isArray(result.weitere_ansprechpartner)
+      ? result.weitere_ansprechpartner
+      : [],
+    co_traveller: result.co_traveller ?? null,
+    kategorie: result.kategorie ?? null,
+    unterkategorie: result.unterkategorie ?? null,
+    status_crm: result.status_crm ?? null,
+    beschreibung: result.beschreibung ?? null,
+    notizen: result.notizen ?? null,
+    wettbewerber: result.wettbewerber ?? null,
+    verkaufsprozess: Array.isArray(result.verkaufsprozess)
+      ? result.verkaufsprozess
+      : [],
+    beginndatum: result.beginndatum ?? null,
+    enddatum: result.enddatum ?? null,
+    pruefen_felder: Array.isArray(result.pruefen_felder)
+      ? result.pruefen_felder
+      : [],
+  };
+}
+
 export default function Home() {
   const [phone, setPhone] = useState("");
   const [callState, setCallState] = useState<CallState>("ready");
@@ -168,6 +202,9 @@ export default function Home() {
   const [editVisit, setEditVisit] = useState<DemoVisit | null>(null);
   const [editing, setEditing] = useState(false);
   const [listInfo, setListInfo] = useState("");
+
+  // visit_id des Besuchs, der gerade einzeln aktualisiert wird (Button-Ladezustand)
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   const busy = callState === "starting" || callState === "polling";
 
@@ -195,31 +232,64 @@ export default function Home() {
     setEditing(false);
   }, []);
 
-  async function pollVisitStatus(visitId: string) {
+  /** Fragt den Status-Webhook genau einmal ab (kein Polling-Loop). */
+  async function checkVisitStatusOnce(visitId: string) {
     const statusUrl = process.env.NEXT_PUBLIC_VISIT_STATUS_WEBHOOK_URL;
     if (!statusUrl) throw new Error("Status-Webhook fehlt.");
 
+    const response = await fetch(statusUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visit_id: visitId }),
+    });
+
+    if (!response.ok) throw new Error("Status konnte nicht geladen werden.");
+
+    const result = await response.json();
+    const status = String(result.status ?? "").toLowerCase();
+    const completed =
+      result.completed === true ||
+      result.abgeholt === true ||
+      ["completed", "done", "erledigt"].includes(status);
+
+    return { completed, result };
+  }
+
+  async function pollVisitStatus(visitId: string) {
     for (let attempt = 0; attempt < 60; attempt += 1) {
-      const response = await fetch(statusUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visit_id: visitId }),
-      });
-
-      if (!response.ok) throw new Error("Status konnte nicht geladen werden.");
-
-      const result = await response.json();
-      const status = String(result.status ?? "").toLowerCase();
-      const completed =
-        result.completed === true ||
-        result.abgeholt === true ||
-        ["completed", "done", "erledigt"].includes(status);
-
+      const { completed, result } = await checkVisitStatusOnce(visitId);
       if (completed) return result;
       await wait(3000);
     }
 
     throw new Error("Noch keine Auswertung verfügbar.");
+  }
+
+  /** Manuelles Nachladen eines einzelnen Besuchs, z.B. nach einem Timeout. */
+  async function aktualisierenVisit(visit: DemoVisit) {
+    if (refreshingId) return;
+    setRefreshingId(visit.visit_id);
+    setListInfo("");
+
+    try {
+      const { completed, result } = await checkVisitStatusOnce(visit.visit_id);
+
+      if (completed) {
+        saveVisit(alsDemoVisit(visit.visit_id, visit.phone, visit.erstellt_am, result));
+        setListInfo(`„${visit.organisation ?? visit.visit_id}“ aktualisiert.`);
+        if (selected?.visit_id === visit.visit_id) {
+          setSelected(alsDemoVisit(visit.visit_id, visit.phone, visit.erstellt_am, result));
+        }
+      } else {
+        setListInfo("Noch keine Auswertung verfügbar. Später erneut versuchen.");
+      }
+    } catch (error) {
+      setListInfo(
+        `Aktualisierung fehlgeschlagen: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+      );
+    } finally {
+      setRefreshingId(null);
+    }
   }
 
   async function startVisit(event: FormEvent<HTMLFormElement>) {
@@ -262,10 +332,11 @@ export default function Home() {
 
       const startResult = await response.json();
       const aktiveVisitId = startResult.visit_id ?? visitId;
+      const erstelltAm = new Date().toISOString();
 
       saveVisit({
         visit_id: aktiveVisitId,
-        erstellt_am: new Date().toISOString(),
+        erstellt_am: erstelltAm,
         phone: phone.trim(),
       });
 
@@ -274,31 +345,7 @@ export default function Home() {
 
       const visit = await pollVisitStatus(aktiveVisitId);
 
-      saveVisit({
-        visit_id: aktiveVisitId,
-        erstellt_am: visit.erstellt_am ?? new Date().toISOString(),
-        phone: phone.trim(),
-        organisation: visit.organisation ?? null,
-        ansprechpartner: visit.ansprechpartner ?? null,
-        weitere_ansprechpartner: Array.isArray(visit.weitere_ansprechpartner)
-          ? visit.weitere_ansprechpartner
-          : [],
-        co_traveller: visit.co_traveller ?? null,
-        kategorie: visit.kategorie ?? null,
-        unterkategorie: visit.unterkategorie ?? null,
-        status_crm: visit.status_crm ?? null,
-        beschreibung: visit.beschreibung ?? null,
-        notizen: visit.notizen ?? null,
-        wettbewerber: visit.wettbewerber ?? null,
-        verkaufsprozess: Array.isArray(visit.verkaufsprozess)
-          ? visit.verkaufsprozess
-          : [],
-        beginndatum: visit.beginndatum ?? null,
-        enddatum: visit.enddatum ?? null,
-        pruefen_felder: Array.isArray(visit.pruefen_felder)
-          ? visit.pruefen_felder
-          : [],
-      });
+      saveVisit(alsDemoVisit(aktiveVisitId, phone.trim(), erstelltAm, visit));
 
       setCallState("success");
       setStatusText(
@@ -307,7 +354,7 @@ export default function Home() {
     } catch (error) {
       setCallState("error");
       setStatusText(
-        `Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`,
+        `Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}. Der Besuch kann später über „Meine Anrufe“ mit „Aktualisieren“ nachgeladen werden.`,
       );
     }
   }
@@ -527,12 +574,29 @@ export default function Home() {
 
       <section id="besuche" className="border-y border-white/10 bg-[#101010]">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#e30613]">
-            Meine Anrufe
-          </p>
-          <h2 className="mt-3 text-3xl font-bold sm:text-4xl">
-            Erfasste Besuche prüfen und bearbeiten.
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#e30613]">
+                Meine Anrufe
+              </p>
+              <h2 className="mt-3 text-3xl font-bold sm:text-4xl">
+                Erfasste Besuche prüfen und bearbeiten.
+              </h2>
+            </div>
+            {visits.some(istUnvollstaendig) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const offene = visits.filter(istUnvollstaendig);
+                  offene.forEach((v) => aktualisierenVisit(v));
+                }}
+                disabled={refreshingId !== null}
+                className="shrink-0 rounded-full border border-white/15 bg-[#181818] px-4 py-2 text-sm font-medium hover:bg-[#222222] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Alle wartenden aktualisieren
+              </button>
+            )}
+          </div>
           <p className="mt-3 max-w-2xl leading-7 text-[#8e8e93]">
             {listInfo ||
               "Die Besuche liegen ausschließlich in diesem Browser und sind für niemanden sonst sichtbar."}
@@ -550,41 +614,60 @@ export default function Home() {
               {visits.map((visit) => {
                 const offen = istUnvollstaendig(visit);
                 const zuPruefen = (visit.pruefen_felder?.length ?? 0) > 0;
+                const wirdAktualisiert = refreshingId === visit.visit_id;
                 return (
-                  <button
+                  <div
                     key={visit.visit_id}
-                    type="button"
-                    onClick={() => {
-                      setSelected(visit);
-                      setEditVisit(visit);
-                      setEditing(false);
-                    }}
-                    className="rounded-3xl border border-white/10 bg-[#181818] p-5 text-left hover:bg-[#1f1f1f]"
+                    className="rounded-3xl border border-white/10 bg-[#181818] p-5 hover:bg-[#1f1f1f]"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-semibold">
-                        {visit.organisation || "Auswertung ausstehend"}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(visit);
+                        setEditVisit(visit);
+                        setEditing(false);
+                      }}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-semibold">
+                          {visit.organisation || "Auswertung ausstehend"}
+                        </p>
+                        <span
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                            offen
+                              ? "bg-[#2c2c2e] text-[#c7c7cc]"
+                              : zuPruefen
+                                ? "bg-[#5c4513] text-[#ffd60a]"
+                                : "bg-[#174a2b] text-[#35c759]"
+                          }`}
+                        >
+                          {offen ? "Wartet" : zuPruefen ? "Prüfen" : "Erfasst"}
+                        </span>
+                      </div>
+                      {visit.ansprechpartner && (
+                        <p className="mt-2 text-sm text-[#c7c7cc]">{visit.ansprechpartner}</p>
+                      )}
+                      <p className="mt-3 text-sm text-[#8e8e93]">
+                        {formatDatumZeit(visit.beginndatum ?? visit.erstellt_am)}
                       </p>
-                      <span
-                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                          offen
-                            ? "bg-[#2c2c2e] text-[#c7c7cc]"
-                            : zuPruefen
-                              ? "bg-[#5c4513] text-[#ffd60a]"
-                              : "bg-[#174a2b] text-[#35c759]"
-                        }`}
+                      <p className="mt-1 text-xs text-[#5e5e63]">{visit.visit_id}</p>
+                    </button>
+
+                    {offen && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          aktualisierenVisit(visit);
+                        }}
+                        disabled={wirdAktualisiert}
+                        className="mt-4 w-full rounded-xl border border-white/15 bg-[#101010] px-4 py-2 text-xs font-semibold text-[#c7c7cc] hover:bg-[#151515] disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        {offen ? "Wartet" : zuPruefen ? "Prüfen" : "Erfasst"}
-                      </span>
-                    </div>
-                    {visit.ansprechpartner && (
-                      <p className="mt-2 text-sm text-[#c7c7cc]">{visit.ansprechpartner}</p>
+                        {wirdAktualisiert ? "Wird aktualisiert …" : "Aktualisieren"}
+                      </button>
                     )}
-                    <p className="mt-3 text-sm text-[#8e8e93]">
-                      {formatDatumZeit(visit.beginndatum ?? visit.erstellt_am)}
-                    </p>
-                    <p className="mt-1 text-xs text-[#5e5e63]">{visit.visit_id}</p>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -616,6 +699,19 @@ export default function Home() {
             </div>
 
             <div className="max-h-[70vh] overflow-y-auto px-6 py-6">
+              {!editing && selected && istUnvollstaendig(selected) && (
+                <button
+                  type="button"
+                  onClick={() => aktualisierenVisit(selected)}
+                  disabled={refreshingId === selected.visit_id}
+                  className="mb-5 w-full rounded-2xl border border-white/15 bg-[#181818] px-5 py-3 font-semibold hover:bg-[#222222] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {refreshingId === selected.visit_id
+                    ? "Wird aktualisiert …"
+                    : "Auswertung aktualisieren"}
+                </button>
+              )}
+
               {editing && editVisit ? (
                 <div className="space-y-5">
                   <Feld
