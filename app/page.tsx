@@ -234,7 +234,7 @@ export default function Home() {
 
   /** Fragt den Status-Webhook genau einmal ab (kein Polling-Loop). */
   async function checkVisitStatusOnce(visitId: string) {
-    const statusUrl = process.env.NEXT_PUBLIC_VISIT_STATUS_WEBHOOK_URL;
+    const statusUrl = "/api/visit-status";
     if (!statusUrl) throw new Error("Status-Webhook fehlt.");
 
     const response = await fetch(statusUrl, {
@@ -256,7 +256,7 @@ export default function Home() {
   }
 
   async function pollVisitStatus(visitId: string) {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
       const { completed, result } = await checkVisitStatusOnce(visitId);
       if (completed) return result;
       await wait(3000);
@@ -296,7 +296,7 @@ export default function Home() {
     event.preventDefault();
     if (busy) return;
 
-    const startUrl = process.env.NEXT_PUBLIC_CALL_START_WEBHOOK_URL;
+    const startUrl = "/api/call-start";
     if (!startUrl) {
       setCallState("error");
       setStatusText("Start-Webhook ist noch nicht eingerichtet.");
@@ -340,17 +340,18 @@ export default function Home() {
         phone: phone.trim(),
       });
 
-      setCallState("polling");
+           setCallState("polling");
       setStatusText("Gespräch läuft – warte auf Auswertung …");
 
-      const visit = await pollVisitStatus(aktiveVisitId);
-
-      saveVisit(alsDemoVisit(aktiveVisitId, phone.trim(), erstelltAm, visit));
-
-      setCallState("success");
-      setStatusText(
-        `Besuch erfasst: ${visit.organisation ?? aktiveVisitId}`,
-      );
+      try {
+        const visit = await pollVisitStatus(aktiveVisitId);
+        saveVisit(alsDemoVisit(aktiveVisitId, phone.trim(), erstelltAm, visit));
+        setCallState("success");
+        setStatusText(`Besuch erfasst: ${visit.organisation ?? aktiveVisitId}`);
+      } catch {
+        setCallState("success");
+        setStatusText("Anruf gestartet. Auswertung später über „Meine Anrufe“ aktualisieren.");
+      }
     } catch (error) {
       setCallState("error");
       setStatusText(
