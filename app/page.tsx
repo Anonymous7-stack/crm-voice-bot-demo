@@ -332,6 +332,7 @@ export default function Home() {
       }
 
       const aktiveVisitId = startResult.visit_id ?? visitId;
+      const erstelltAm = new Date().toISOString();
 
       saveVisit({
         visit_id: aktiveVisitId,
