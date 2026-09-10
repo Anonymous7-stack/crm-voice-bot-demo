@@ -235,8 +235,7 @@ export default function Home() {
   /** Fragt den Status-Webhook genau einmal ab (kein Polling-Loop). */
   async function checkVisitStatusOnce(visitId: string) {
     const statusUrl = "/api/visit-status";
-    if (!statusUrl) throw new Error("Status-Webhook fehlt.");
-
+    
     const response = await fetch(statusUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -297,11 +296,6 @@ export default function Home() {
     if (busy) return;
 
     const startUrl = "/api/call-start";
-    if (!startUrl) {
-      setCallState("error");
-      setStatusText("Start-Webhook ist noch nicht eingerichtet.");
-      return;
-    }
 
     if (!phone.trim()) {
       setCallState("error");
@@ -328,11 +322,16 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) throw new Error("Anruf konnte nicht gestartet werden.");
+           if (!response.ok) throw new Error("Anruf konnte nicht gestartet werden.");
 
-      const startResult = await response.json();
+      let startResult: any = {};
+      try {
+        startResult = await response.json();
+      } catch {
+        startResult = {};
+      }
+
       const aktiveVisitId = startResult.visit_id ?? visitId;
-      const erstelltAm = new Date().toISOString();
 
       saveVisit({
         visit_id: aktiveVisitId,
