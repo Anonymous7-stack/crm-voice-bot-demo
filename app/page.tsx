@@ -226,10 +226,20 @@ export default function Home() {
     <main className={`${inter.variable} ${condensed.variable} min-h-screen bg-[#0b0d12] font-[family-name:var(--font-straumann-body)] text-white`}>
       <header className="border-b border-white/10 bg-[#0b0d12]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8 sm:py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#4d63b8] shadow-[0_0_24px_rgba(77,99,184,0.30)]"><span className="h-3 w-3 rounded-full border-2 border-white" /></div>
-            <div><p className="font-[family-name:var(--font-straumann-display)] text-lg font-bold tracking-tight">CRM Voice Bot</p><p className="mt-0.5 text-xs text-[#8e8e93]">Straumann Projektdemo</p></div>
-          </div>
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+  /straumann-group-logo.png
+
+  <div className="hidden h-8 w-px shrink-0 bg-white/15 sm:block" />
+
+  <div className="hidden min-w-0 sm:block">
+    <p className="truncate font-[family-name:var(--font-straumann-display)] text-lg font-bold tracking-tight">
+      CRM Voice Bot
+    </p>
+    <p className="mt-0.5 text-xs text-[#8e8e93]">
+      Interaktive Projektdemo
+    </p>
+  </div>
+</div>
           <nav className="flex gap-2">
             <a href="#besuche" className="rounded-full border border-white/15 bg-[#171a22] px-3 py-2 text-xs font-semibold hover:border-[#5928ff]/70 hover:bg-[#202532] sm:px-4 sm:text-sm">Meine Anrufe</a>
             <a href="#feedback" className="hidden rounded-full border border-white/15 bg-[#171a22] px-4 py-2 text-sm font-medium hover:border-[#5928ff]/70 hover:bg-[#202532] sm:inline-flex">Feedback</a>
