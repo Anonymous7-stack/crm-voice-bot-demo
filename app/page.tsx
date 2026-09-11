@@ -221,4 +221,3 @@ function Auswahl({ label, value, options, onChange }: { label: string; value: st
 function Anzeige({ label, wert }: { label: string; wert?: string | null }) {
   return <div className="flex items-start justify-between gap-6 border-b border-white/5 py-2.5"><span className="shrink-0 text-sm text-[#8e8e93]">{label}</span><span className="text-right text-sm">{wert || "–"}</span></div>;
 }
-s
