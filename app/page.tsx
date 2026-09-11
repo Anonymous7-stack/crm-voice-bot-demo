@@ -143,7 +143,7 @@ export default function Home() {
       <header className="border-b border-white/10 bg-[#0b0b0b]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8 sm:py-5">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <img src="/straumann-group-logo.png" alt="Straumann Group" className="h-9 w-auto max-w-[145px] shrink-0 object-contain sm:h-10 sm:max-w-[180px]" />
+            <img src="/straumann-group-logo.png" alt="Straumann Group" className="h-14 w-auto max-w-[220px] shrink-0 object-contain sm:h-10 sm:max-w-[180px]" />
             <div className="hidden h-8 w-px shrink-0 bg-white/15 sm:block" />
             <div className="hidden min-w-0 sm:block"><p className="truncate font-[family-name:var(--font-display)] text-lg font-bold">CRM Voice Bot</p><p className="mt-0.5 text-xs text-[#8e8e93]">Interaktive Projektdemo</p></div>
           </div>
